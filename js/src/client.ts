@@ -42,6 +42,7 @@ import {
   RawExample,
   AttachmentInfo,
   AttachmentData,
+  DatasetVersion,
 } from "./schemas.js";
 import {
   convertLangChainMessageToExample,
@@ -1837,6 +1838,98 @@ export class Client implements LangSmithTracingClientInterface {
   }
 
   /**
+   * Lists the versions of a dataset.
+   *
+   * @param {Object} params - The parameters for listing dataset versions.
+   * @param {string} params.datasetId - The ID of the dataset.
+   * @param {string} [params.search] - Optional search query to filter dataset versions.
+   * @param {string} [params.example] - Optional example query to filter dataset versions.
+   * @param {number} [params.limit=100] - The maximum number of dataset versions to return.
+   * @param {number} [params.offset=0] - The offset for pagination.
+   * @returns {Promise<DatasetVersion[]>} A promise that resolves to an array of dataset versions.
+   * @throws {Error} Throws an error if the datasetId is not a valid UUID.
+   */
+  public async listDatasetVersions({
+    datasetId,
+    search,
+    example,
+    limit = 100,
+    offset = 0,
+  }: {
+    datasetId: string;
+    search?: string;
+    example?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<DatasetVersion[]> {
+    assertUuid(datasetId);
+    const params = new URLSearchParams({
+      limit: limit.toString(),
+      offset: offset.toString(),
+    });
+    if (search !== undefined) {
+      params.append("search", search);
+    }
+    if (example !== undefined) {
+      params.append("example", example);
+    }
+    const response = await this.caller.call(
+      _getFetchImplementation(),
+      `${this.apiUrl}/datasets/${datasetId}/versions?${params.toString()}`,
+      {
+        method: "GET",
+        headers: this.headers,
+        signal: AbortSignal.timeout(this.timeout_ms),
+        ...this.fetchOptions,
+      }
+    );
+    const datasetVersions = await response.json();
+    return datasetVersions as DatasetVersion[];
+  }
+
+  /**
+   * Updates the version of a dataset.
+   *
+   * @param {string} dataSetId - The ID of the dataset to update.
+   * @param {Object} options - The options for updating the dataset version.
+   * @param {string} options.asOf - The timestamp of the dataset version.
+   * @param {string} options.tag - The tag of the dataset version.
+   * @returns {Promise<DatasetVersion>} - A promise that resolves to the updated dataset version.
+   * @throws {Error} - Throws an error if the update fails.
+   */
+  public async updateDatasetVersion(
+    dataSetId: string,
+    {
+      asOf,
+      tag,
+    }: {
+      asOf: string;
+      tag: string;
+    }
+  ): Promise<DatasetVersion> {
+    assertUuid(dataSetId);
+    const endpoint = `${this.apiUrl}/datasets/${dataSetId}/tags`;
+    const body: RecordStringAny = {
+      as_of: asOf,
+      tag,
+    };
+    const response = await this.caller.call(
+      _getFetchImplementation(),
+      endpoint,
+      {
+        method: "PUT",
+        headers: { ...this.headers, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(this.timeout_ms),
+        ...this.fetchOptions,
+      }
+    );
+    await raiseForStatus(response, "update dataset version");
+    const result = await response.json();
+    return result as DatasetVersion;
+  }
+
+  /**
    * Get shared examples.
    *
    * @param {string} shareToken The share token to get examples for. A share token is the UUID (or LangSmith URL, including UUID) generated when explicitly marking an example as public.
@@ -2121,6 +2214,7 @@ export class Client implements LangSmithTracingClientInterface {
     nameContains,
     referenceDatasetId,
     referenceDatasetName,
+    datasetVersion,
     referenceFree,
     metadata,
   }: {
@@ -2129,9 +2223,10 @@ export class Client implements LangSmithTracingClientInterface {
     nameContains?: string;
     referenceDatasetId?: string;
     referenceDatasetName?: string;
+    datasetVersion?: string;
     referenceFree?: boolean;
     metadata?: RecordStringAny;
-  } = {}): AsyncIterable<TracerSession> {
+  } = {}): AsyncIterable<TracerSessionResult> {
     const params = new URLSearchParams();
     if (projectIds !== undefined) {
       for (const projectId of projectIds) {
@@ -2152,13 +2247,16 @@ export class Client implements LangSmithTracingClientInterface {
       });
       params.append("reference_dataset", dataset.id);
     }
+    if (datasetVersion !== undefined) {
+      params.append("dataset_version", datasetVersion);
+    }
     if (referenceFree !== undefined) {
       params.append("reference_free", referenceFree.toString());
     }
     if (metadata !== undefined) {
       params.append("metadata", JSON.stringify(metadata));
     }
-    for await (const projects of this._getPaginated<TracerSession>(
+    for await (const projects of this._getPaginated<TracerSessionResult>(
       "/sessions",
       params
     )) {
@@ -2642,17 +2740,21 @@ export class Client implements LangSmithTracingClientInterface {
       const dataset = await this.readDataset({ datasetName });
       datasetId_ = dataset.id;
     }
-
-    const createdAt_ = createdAt || new Date();
+    // Note: the created at time will be added by the langsmith server when not provided.
+    // This will ensure the timestamp will be of the standard langsmith datetime format.
+    // 2025-01-10T14:43:55.017298+00:00 i.e with 6 digits for fractional seconds.
+    const createdAt_ = createdAt
+      ? new Date(createdAt).toISOString()
+      : undefined;
     const data: ExampleCreate = {
       dataset_id: datasetId_,
       inputs,
       outputs,
-      created_at: createdAt_?.toISOString(),
       id: exampleId,
       metadata,
       split,
       source_run_id: sourceRunId,
+      ...(createdAt_ && { created_at: createdAt_ }),
     };
 
     const response = await this.caller.call(
