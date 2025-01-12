@@ -1,6 +1,9 @@
 {
   "name": "@ten-dev/langsmith",
-  "version": "0.2.16",
+  "version": "0.2.15-inc.1",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "description": "Client library to connect to the LangSmith LLM Tracing and Evaluation Platform.",
   "packageManager": "yarn@1.22.19",
   "files": [
@@ -86,7 +89,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/langchain-ai/langsmith-sdk.git"
+    "url": "git+https://github.com/ten-dev/langsmith-sdk.git"
   },
   "keywords": [
     "LLM",
