@@ -924,7 +924,7 @@ class ExperimentResults implements AsyncIterableIterator<ExperimentResultRow> {
       this.processedCount++;
     }
     this.summaryResults = await manager.getSummaryScores();
-    this.datasetVersion = await manager._getDatasetVersion();
+    this.datasetVersion = this.manager._metadata?.dataset_version;
   }
 
   get length(): number {
