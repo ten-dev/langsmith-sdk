@@ -1,6 +1,6 @@
 {
   "name": "@ten-dev/langsmith",
-  "version": "0.2.15-inc.5",
+  "version": "0.2.15-inc.6",
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
   },
