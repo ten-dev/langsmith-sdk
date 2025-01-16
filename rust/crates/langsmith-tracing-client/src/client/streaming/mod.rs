@@ -1,3 +1,4 @@
+mod multipart_writer;
 mod processor;
 mod tracing_client;
 
